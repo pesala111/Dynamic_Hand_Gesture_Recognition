@@ -6,6 +6,7 @@ from torchvision import transforms
 from sklearn.model_selection import train_test_split
 from collections import defaultdict
 
+# change the input directory to the dataset path
 root_dir = '/content/drive/MyDrive/Hand_gesture_dataset_V5'
 
 gesture_classes = os.listdir(root_dir)
@@ -14,14 +15,12 @@ labels = []
 label_to_int = {}
 
 # Data Loading
+
 i = 1
 j = 0
-selected_gestures = ["08_Pointing", "09_Pulling", "13_Three_Finger_Open", "01_Horizontal_swiping", "17_Five_Finger_Closure", "07_V_Swiping_Down"]
+
 for gestures in gesture_classes:
     class_dir = os.path.join(root_dir, gestures)
-
-    if gestures not in selected_gestures:  # Skip if the gesture is not in the selected list
-        continue
     print(f"Class {i}")
     i += 1
     for gesture_video in os.listdir(class_dir):
@@ -37,7 +36,7 @@ for gestures in gesture_classes:
             frames.append(frame)
         cap.release()
 
-        # Normalization
+        # Normalization without Rotation or Translation
         normalize = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize((224, 224)),
@@ -45,13 +44,37 @@ for gestures in gesture_classes:
             transforms.Normalize(mean=[0.0014, 0.0014, 0.0015], std=[0.0117, 0.0119, 0.0123])])
 
         normalized_frames = torch.stack([normalize(frame) for frame in frames])
-
         data.append(normalized_frames.permute(1, 0, 2, 3))  # Changing the channels and frames order
+
+        # Normalization with only Rotation
+        normalize_with_rotation = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((224, 224)),
+            transforms.RandomRotation(degrees=5),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.0014, 0.0014, 0.0015], std=[0.0117, 0.0119, 0.0123])])
+
+        rotated_frames = torch.stack([normalize_with_rotation(frame) for frame in frames])
+        data.append(rotated_frames.permute(1, 0, 2, 3))  # Changing the channels and frames order
+
+        # Normalization with only Translation
+        normalize_with_translation = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((224, 224)),
+            transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),  # Random translation of up to 10%
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.0014, 0.0014, 0.0015], std=[0.0117, 0.0119, 0.0123])])
+
+        translated_frames = torch.stack([normalize_with_translation(frame) for frame in frames])
+        data.append(translated_frames.permute(1, 0, 2, 3))  # Changing the channels and frames order
+
         if gestures not in label_to_int:
             label_to_int[gestures] = j
             j += 1
 
         labels.append(label_to_int[gestures])
+        labels.append(label_to_int[gestures])  # Adding label for the rotated video
+        labels.append(label_to_int[gestures])  # Adding label for the translated video
 
 print("Gesture Classes:", labels)
 print("label_to_int:", label_to_int)
@@ -115,7 +138,7 @@ class ResNet3D(nn.Module):
     def forward(self, x):
         return self.resnet3d(x)
 
-num_classes = 6  # Adjust the classes
+num_classes = 17  # Adjust the classes
 model = ResNet3D(num_classes)
 
 model.eval()
@@ -125,12 +148,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.0005, momentum=0.9, weight_decay= 0.00001)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.0005, momentum=0.9, weight_decay=0.00001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, verbose=True)
 
 model.to(device)
-num_epochs = 35
-patience = 4
+num_epochs = 45
+patience = 5
 train_losses = []
 val_losses = []
 train_accuracies = []
