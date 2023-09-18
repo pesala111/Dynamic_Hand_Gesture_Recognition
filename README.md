@@ -11,6 +11,6 @@ Install the required packages using pip:
 ```python
 conda install torch torchvision opencv-python numpy scikit-learn matplotlib mediapipe
 ```
-# Run the Model
-file name "Recognition_Model.py"
-In the model code, ensure to change the dataset's root directory to its respective location on your system.
+# Executing the Model
+Before running the model, make sure to update the dataset's root directory to its correct path on your local system. The model's code can be found in the file named "Recognition_Model.py".
+
